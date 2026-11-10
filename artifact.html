@@ -1,0 +1,293 @@
+<title>Painwood</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+  /* Layout: one narrow column, a big "bookmark" card up top, controls and log below. */
+  :root {
+    --bg: #e9eef0; --surface: #f8fafa; --ink: #1d2a33; --muted: #5d6b74;
+    --line: #cfd8dc; --accent: #2f6b4f; --accent-ink: #ffffff; --track: #d7e0e3;
+    --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+    --body: "Atkinson Hyperlegible", system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #141b1f; --surface: #1c252a; --ink: #e4ebee; --muted: #93a2aa;
+    --line: #2d393f; --accent: #6fbf95; --accent-ink: #0f1a14; --track: #2d393f; color-scheme: dark; } }
+  :root[data-theme="dark"] {
+    --bg: #141b1f; --surface: #1c252a; --ink: #e4ebee; --muted: #93a2aa;
+    --line: #2d393f; --accent: #6fbf95; --accent-ink: #0f1a14; --track: #2d393f; color-scheme: dark; }
+
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font: 16px/1.5 var(--body); }
+  main { max-width: 560px; margin: 0 auto; padding-block: 32px 64px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid; gap: 16px; }
+  header h1 { font: 800 34px/1.1 var(--display); margin: 0; letter-spacing: -.01em; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px;
+    display: grid; gap: 12px; min-width: 0; }
+  .label { font: 700 12px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .bookmark { border-color: var(--accent); border-width: 2px; }
+  .date { font: 600 clamp(26px, 7vw, 34px)/1.15 var(--display); margin: 0; text-wrap: balance; }
+  .small { font-size: 14px; color: var(--muted); margin: 0; }
+  .track { height: 10px; background: var(--track); border-radius: 5px; overflow: hidden; }
+  .track > div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button, .btn { font: 700 15px var(--body); border-radius: 8px; padding: 10px 14px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-decoration: none; }
+  button:hover, .btn:hover { border-color: var(--muted); }
+  .primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .primary:hover { border-color: var(--accent); filter: brightness(1.05); }
+  .danger { color: #b3261e; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  input { font: 15px var(--body); padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--ink); min-width: 0; flex: 1 1 180px; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { padding: 9px 0; border-top: 1px solid var(--line); display: flex; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+  li:first-child { border-top: 0; }
+  details summary { cursor: pointer; font-weight: 700; color: var(--muted); }
+  details[open] { display: grid; gap: 10px; }
+  .status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--accent); }
+  .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+    background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 14px;
+    opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .track > div, .toast { transition: none; } }
+</style>
+
+<main>
+  <header>
+    <h1>Painwood</h1>
+    <p>Your place in Achewood, from the first strip on October 1, 2001.</p>
+  </header>
+
+  <section class="card bookmark" aria-live="polite">
+    <div class="label">You left off at</div>
+    <p class="date" id="current">Monday, October 1, 2001</p>
+    <p class="small" id="lastRead">Starting at the very first strip.</p>
+    <div class="track"><div id="progress"></div></div>
+    <p class="small" id="progressText">0% through the 2001–2011 run</p>
+    <div class="row">
+      <a class="btn primary" id="openBtn" target="_blank" rel="noopener" href="https://achewood.com/index.php?date=10012001">Open this strip</a>
+      <button id="prevBtn" type="button">← Back a day</button>
+      <button id="nextBtn" type="button">Next day →</button>
+    </div>
+    <div class="status"><span class="dot" id="dot"></span><span id="sync">Connecting to your saved bookmark…</span></div>
+  </section>
+
+  <section class="card">
+    <div class="label">Update your bookmark</div>
+    <p class="small">When you stop reading, save the date of the last strip you read, or paste its address.</p>
+    <form class="row" id="dateForm">
+      <input type="date" id="dateInput" aria-label="Date of the last strip you read" min="2001-10-01">
+      <button type="submit">Save date</button>
+    </form>
+    <form class="row" id="urlForm">
+      <input type="text" id="urlInput" placeholder="Paste a strip address" aria-label="Strip address">
+      <button type="submit">Save address</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="label">Reading log</div>
+    <ul id="log"></ul>
+    <p class="small" id="emptyLog">No sessions yet. Each day you save your place shows up here.</p>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>Settings</summary>
+      <p class="small">Strip link pattern. Use {YYYY}, {MM} and {DD} where the date goes.</p>
+      <form class="row" id="patternForm">
+        <input type="text" id="patternInput" aria-label="Strip link pattern">
+        <button type="submit">Save pattern</button>
+      </form>
+      <div class="row" id="resetRow">
+        <button type="button" class="danger" id="resetBtn">Start over…</button>
+      </div>
+      <div class="row" id="confirmRow" hidden>
+        <span class="small" style="align-self:center">Clear your bookmark and log?</span>
+        <button type="button" class="danger" id="confirmReset">Yes, start over</button>
+        <button type="button" id="cancelReset">Keep it</button>
+      </div>
+    </details>
+  </section>
+</main>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+  var FIRST = "2001-10-01";
+  var LAST_KNOWN = "2011-12-31";
+  var DEFAULT_PATTERN = "https://achewood.com/index.php?date={MM}{DD}{YYYY}";
+  var LOCAL_KEY = "painwood.v1";
+
+  var state = { date: FIRST, pattern: DEFAULT_PATTERN, log: [], updated: null };
+  var ref = null;            // db document, once connected
+  var writing = Promise.resolve();
+
+  function $(id) { return document.getElementById(id); }
+  function parse(d) { var p = d.split("-"); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); }
+  function iso(dt) { return dt.toISOString().slice(0, 10); }
+  function addDays(d, n) { var dt = parse(d); dt.setUTCDate(dt.getUTCDate() + n); return iso(dt); }
+  function localToday() { var t = new Date(); return iso(new Date(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()))); }
+  function pretty(d, short) {
+    return parse(d).toLocaleDateString(undefined, short
+      ? { timeZone: "UTC", year: "numeric", month: "short", day: "numeric" }
+      : { timeZone: "UTC", weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  }
+  function link(d) {
+    var p = d.split("-");
+    return (state.pattern || DEFAULT_PATTERN).replace("{YYYY}", p[0]).replace("{MM}", p[1]).replace("{DD}", p[2]);
+  }
+  function toast(msg) {
+    var t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove("show"); }, 1800);
+  }
+  function setSync(text, ok) { $("sync").textContent = text; $("dot").classList.toggle("ok", !!ok); }
+  function valid(d) { return typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(parse(d)); }
+
+  function adopt(s) {
+    if (!s || !valid(s.date)) return false;
+    state = {
+      date: s.date,
+      pattern: typeof s.pattern === "string" && s.pattern.indexOf("{YYYY}") >= 0 ? s.pattern : DEFAULT_PATTERN,
+      log: Array.isArray(s.log) ? s.log.filter(function (e) { return e && valid(e.on) && valid(e.to); }).slice(0, 60) : [],
+      updated: typeof s.updated === "string" ? s.updated : null
+    };
+    return true;
+  }
+
+  try { adopt(JSON.parse(localStorage.getItem(LOCAL_KEY))); } catch (e) {}
+
+  function persist() {
+    state.updated = new Date().toISOString();
+    var snapshot = JSON.parse(JSON.stringify(state));
+    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(snapshot)); } catch (e) {}
+    if (!ref) return;
+    writing = writing.then(function () { return ref.set(snapshot); }).then(function () {
+      setSync("Saved to your account. Open this page on any device to pick up here.", true);
+    }, function () {
+      setSync("Couldn't save to your account just now. It's kept in this browser for the moment.", false);
+    });
+  }
+
+  function setDate(d, msg) {
+    if (!valid(d)) { toast("Pick a full date, like 2004-03-15"); return; }
+    if (d < FIRST) d = FIRST;
+    state.date = d;
+    var today = localToday();
+    if (state.log[0] && state.log[0].on === today) state.log[0] = { on: today, to: d };
+    else state.log.unshift({ on: today, to: d });
+    state.log = state.log.slice(0, 60);
+    persist(); render(); toast(msg || "Bookmark saved");
+  }
+
+  // Pull a date out of the address formats Achewood has used.
+  function dateFromUrl(u) {
+    var m = u.match(/date=(\d{2})(\d{2})(\d{4})/);
+    if (m) return m[3] + "-" + m[1] + "-" + m[2];
+    m = u.match(/(\d{4})[\/-](\d{2})[\/-](\d{2})/);
+    if (m) return m[1] + "-" + m[2] + "-" + m[3];
+    m = u.match(/(\d{2})(\d{2})(\d{4})/);
+    if (m) return m[3] + "-" + m[1] + "-" + m[2];
+    return null;
+  }
+
+  function render() {
+    $("current").textContent = pretty(state.date);
+    $("openBtn").href = link(state.date);
+    $("dateInput").value = state.date;
+    if (document.activeElement !== $("patternInput")) $("patternInput").value = state.pattern;
+    $("lastRead").textContent = state.updated
+      ? "Bookmark saved " + new Date(state.updated).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
+      : "Starting at the very first strip.";
+    var total = parse(LAST_KNOWN) - parse(FIRST);
+    var done = Math.min(Math.max(parse(state.date) - parse(FIRST), 0), total);
+    var pct = Math.round(done / total * 1000) / 10;
+    $("progress").style.width = pct + "%";
+    var years = Math.round((parse(state.date) - parse(FIRST)) / 3.15576e10 * 10) / 10;
+    $("progressText").textContent = state.date > LAST_KNOWN
+      ? "Past the 2001–2011 run and into the later strips."
+      : pct + "% through the 2001–2011 run, " + years + (years === 1 ? " year" : " years") + " in";
+    var ul = $("log"); ul.textContent = "";
+    state.log.slice(0, 20).forEach(function (e) {
+      var li = document.createElement("li");
+      var a = document.createElement("span"); a.textContent = pretty(e.on, true);
+      var b = document.createElement("span"); b.className = "small"; b.textContent = "read through " + pretty(e.to, true);
+      li.appendChild(a); li.appendChild(b); ul.appendChild(li);
+    });
+    $("emptyLog").hidden = state.log.length > 0;
+  }
+
+  $("nextBtn").onclick = function () { setDate(addDays(state.date, 1), "Moved forward a day"); };
+  $("prevBtn").onclick = function () { setDate(addDays(state.date, -1), "Moved back a day"); };
+  $("dateForm").onsubmit = function (e) { e.preventDefault(); setDate($("dateInput").value); };
+  $("urlForm").onsubmit = function (e) {
+    e.preventDefault();
+    var d = dateFromUrl($("urlInput").value.trim());
+    if (!d) { toast("No date found in that address"); return; }
+    $("urlInput").value = ""; setDate(d);
+  };
+  $("patternForm").onsubmit = function (e) {
+    e.preventDefault();
+    var p = $("patternInput").value.trim();
+    if (!/\{YYYY\}/.test(p) || !/\{MM\}/.test(p) || !/\{DD\}/.test(p)) { toast("The pattern needs {YYYY}, {MM} and {DD}"); return; }
+    state.pattern = p; persist(); render(); toast("Link pattern saved");
+  };
+  $("resetBtn").onclick = function () { $("resetRow").hidden = true; $("confirmRow").hidden = false; };
+  $("cancelReset").onclick = function () { $("resetRow").hidden = false; $("confirmRow").hidden = true; };
+  $("confirmReset").onclick = function () {
+    state = { date: FIRST, pattern: state.pattern, log: [], updated: null };
+    persist(); render(); $("cancelReset").onclick(); toast("Back to the first strip");
+  };
+
+  render();
+
+  // Connect to the viewer's private saved bookmark.
+  (async function connect() {
+    var db = null, user = null;
+    try {
+      if (window.claude && window.claude.use) {
+        db = await window.claude.use("db");
+        user = await window.claude.use("user");
+      }
+    } catch (e) {}
+    var id = null;
+    try { id = user ? await user.id() : null; } catch (e) {}
+    if (!db || !id) {
+      setSync("Saving in this browser only. Sign in to Claude to keep your place across devices.", false);
+      return;
+    }
+    var docRef = db.collection("data/users/" + id).doc("bookmark");
+    var timer = setTimeout(function () {
+      setSync("Can't reach your saved bookmark yet. Showing what this browser remembers.", false);
+    }, 10000);
+    var first = true;
+    docRef.onSnapshot(function (snap) {
+      if (!snap.metadata.fromCache) clearTimeout(timer);
+      if (snap.exists) {
+        if (adopt(snap.data())) {
+          try { localStorage.setItem(LOCAL_KEY, JSON.stringify(state)); } catch (e) {}
+          render();
+        }
+        ref = docRef;
+        if (!snap.metadata.fromCache) setSync("Saved to your account. Open this page on any device to pick up here.", true);
+      } else if (!snap.metadata.fromCache && first) {
+        // Nothing saved yet: carry over anything this browser had.
+        first = false;
+        ref = docRef;
+        if (state.updated) persist();
+        else setSync("Connected. Your bookmark will be saved to your account.", true);
+      }
+    }, function () {
+      clearTimeout(timer);
+      setSync("Couldn't connect to your saved bookmark. Saving in this browser for now.", false);
+    });
+  })();
+})();
+</script>

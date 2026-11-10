@@ -2,6 +2,8 @@
 
 A tiny bookmark for reading [Achewood](https://achewood.com) from the first strip (October 1, 2001) onward.
 
+There is also an online version (`artifact.html`), published as a private Claude artifact. It saves your bookmark to your Claude account, so it works on any device you sign in on.
+
 Open `index.html` in a browser, or turn on GitHub Pages for this repo (Settings → Pages → deploy from branch). Then:
 
 - **Open this strip** takes you to the strip you're on.
