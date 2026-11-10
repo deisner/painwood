@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painwood</title>
+<meta name="description" content="A bookmark for reading Achewood from the beginning.">
+<style>
+  :root {
+    --bg: #f6f1e7; --card: #fffdf8; --ink: #2b2620; --muted: #776d60;
+    --line: #ddd3c2; --accent: #a4462a; --accent-ink: #fff; --bar: #e8dfcf;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1c1a17; --card: #25221e; --ink: #ece5d8; --muted: #a59b8c;
+      --line: #3a352e; --accent: #d9734f; --accent-ink: #1c1a17; --bar: #3a352e; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.5 Georgia, "Iowan Old Style", serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 20px; margin-bottom: 16px; }
+  .label { font: 600 12px/1 system-ui, sans-serif; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .big { font-size: 26px; margin: 0 0 4px; }
+  .bar { height: 8px; background: var(--bar); border-radius: 4px; overflow: hidden; margin: 14px 0 6px; }
+  .bar > div { height: 100%; background: var(--accent); width: 0; }
+  .small { font: 13px/1.4 system-ui, sans-serif; color: var(--muted); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  button, .btn { font: 600 15px system-ui, sans-serif; border-radius: 8px; padding: 10px 14px;
+    border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer;
+    text-decoration: none; display: inline-block; }
+  .primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  input[type=date], input[type=text] { font: 15px system-ui, sans-serif; padding: 9px 10px;
+    border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+    min-width: 0; flex: 1; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { padding: 8px 0; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; }
+  li:first-child { border-top: 0; }
+  details summary { cursor: pointer; font: 600 14px system-ui, sans-serif; color: var(--muted); }
+  .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+    background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px;
+    font: 14px system-ui, sans-serif; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Painwood</h1>
+  <p class="sub">A bookmark for reading Achewood from the very first strip.</p>
+
+  <section class="card">
+    <div class="label">You left off at</div>
+    <p class="big" id="current">—</p>
+    <div class="small" id="lastRead"></div>
+    <div class="bar"><div id="progress"></div></div>
+    <div class="small" id="progressText"></div>
+    <div class="row">
+      <a class="btn primary" id="openBtn" target="_blank" rel="noopener">Open this strip</a>
+      <button id="nextBtn" title="Move the bookmark forward one day">Next day →</button>
+      <button id="prevBtn" title="Move the bookmark back one day">← Back</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="label">Update bookmark</div>
+    <p class="small" style="margin:0">After reading, set the date of the last strip you read, or paste its address.</p>
+    <div class="row">
+      <input type="date" id="dateInput" aria-label="Strip date">
+      <button id="setDateBtn">Save date</button>
+    </div>
+    <div class="row">
+      <input type="text" id="urlInput" placeholder="Paste a strip URL" aria-label="Strip URL">
+      <button id="setUrlBtn">Save URL</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="label">Reading log</div>
+    <ul id="log"></ul>
+    <p class="small" id="emptyLog">Nothing yet. Your sessions will show up here.</p>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>Settings and backup</summary>
+      <p class="small">Your bookmark is saved in this browser. Export a backup to move it to another device.</p>
+      <div class="row">
+        <button id="exportBtn">Copy backup code</button>
+        <button id="importBtn">Restore from code</button>
+      </div>
+      <p class="small" style="margin-top:16px">Strip link pattern (<code>{MM}</code>, <code>{DD}</code>, <code>{YYYY}</code>):</p>
+      <div class="row">
+        <input type="text" id="patternInput" aria-label="Link pattern">
+        <button id="savePatternBtn">Save</button>
+      </div>
+      <div class="row"><button id="resetBtn">Start over</button></div>
+    </details>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var FIRST = "2001-10-01";               // first Achewood strip
+  var LAST_KNOWN = "2011-12-31";          // end of the classic run, used for the progress bar
+  var DEFAULT_PATTERN = "https://achewood.com/index.php?date={MM}{DD}{YYYY}";
+  var KEY = "painwood.v1";
+
+  function load() {
+    try { var s = JSON.parse(localStorage.getItem(KEY)); if (s && s.date) return s; } catch (e) {}
+    return { date: FIRST, pattern: DEFAULT_PATTERN, log: [], updated: null };
+  }
+  function save() {
+    state.updated = new Date().toISOString();
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { toast("Couldn't save in this browser"); }
+  }
+  var state = load();
+
+  function parse(d) { var p = d.split("-"); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); }
+  function iso(dt) { return dt.toISOString().slice(0, 10); }
+  function addDays(d, n) { var dt = parse(d); dt.setUTCDate(dt.getUTCDate() + n); return iso(dt); }
+  function pretty(d) {
+    return parse(d).toLocaleDateString(undefined, { timeZone: "UTC", weekday: "short", year: "numeric", month: "long", day: "numeric" });
+  }
+  function link(d) {
+    var p = d.split("-");
+    return (state.pattern || DEFAULT_PATTERN).replace("{YYYY}", p[0]).replace("{MM}", p[1]).replace("{DD}", p[2]);
+  }
+  function $(id) { return document.getElementById(id); }
+  function toast(msg) { var t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove("show"); }, 1800); }
+
+  function setDate(d, how) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || isNaN(parse(d))) { toast("That date doesn't look right"); return; }
+    if (d < FIRST) d = FIRST;
+    state.date = d;
+    var today = iso(new Date());
+    var last = state.log[0];
+    if (last && last.on === today) last.to = d;
+    else state.log.unshift({ on: today, to: d });
+    state.log = state.log.slice(0, 50);
+    save(); render(); toast(how || "Bookmark saved");
+  }
+
+  // Pull a date out of the URL formats Achewood has used.
+  function dateFromUrl(u) {
+    var m = u.match(/date=(\d{2})(\d{2})(\d{4})/);
+    if (m) return m[3] + "-" + m[1] + "-" + m[2];
+    m = u.match(/(\d{4})[\/-](\d{2})[\/-](\d{2})/);
+    if (m) return m[1] + "-" + m[2] + "-" + m[3];
+    m = u.match(/(\d{2})(\d{2})(\d{4})/);
+    if (m) return m[3] + "-" + m[1] + "-" + m[2];
+    return null;
+  }
+
+  function render() {
+    $("current").textContent = pretty(state.date);
+    $("openBtn").href = link(state.date);
+    $("dateInput").value = state.date;
+    $("patternInput").value = state.pattern || DEFAULT_PATTERN;
+    $("lastRead").textContent = state.updated
+      ? "Last updated " + new Date(state.updated).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
+      : "Starting at the very first strip.";
+    var total = parse(LAST_KNOWN) - parse(FIRST);
+    var done = Math.min(Math.max(parse(state.date) - parse(FIRST), 0), total);
+    var pct = Math.round(done / total * 1000) / 10;
+    $("progress").style.width = pct + "%";
+    var years = Math.round((parse(state.date) - parse(FIRST)) / 3.15576e10 * 10) / 10;
+    $("progressText").textContent = state.date > LAST_KNOWN
+      ? "Past the classic 2001–2011 run. Well done."
+      : pct + "% through the classic 2001–2011 run (" + years + " years in)";
+    var ul = $("log"); ul.innerHTML = "";
+    state.log.slice(0, 15).forEach(function (e) {
+      var li = document.createElement("li");
+      var a = document.createElement("span");
+      a.textContent = new Date(e.on + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+      var b = document.createElement("span"); b.className = "small"; b.textContent = "read through " + pretty(e.to);
+      li.appendChild(a); li.appendChild(b); ul.appendChild(li);
+    });
+    $("emptyLog").style.display = state.log.length ? "none" : "block";
+  }
+
+  $("nextBtn").onclick = function () { setDate(addDays(state.date, 1), "Moved forward a day"); };
+  $("prevBtn").onclick = function () { setDate(addDays(state.date, -1), "Moved back a day"); };
+  $("setDateBtn").onclick = function () { setDate($("dateInput").value); };
+  $("setUrlBtn").onclick = function () {
+    var d = dateFromUrl($("urlInput").value.trim());
+    if (!d) { toast("Couldn't find a date in that URL"); return; }
+    $("urlInput").value = ""; setDate(d);
+  };
+  $("savePatternBtn").onclick = function () {
+    var p = $("patternInput").value.trim();
+    if (p.indexOf("{YYYY}") < 0) { toast("Pattern needs {YYYY}, {MM} and {DD}"); return; }
+    state.pattern = p; save(); render(); toast("Link pattern saved");
+  };
+  $("exportBtn").onclick = function () {
+    var code = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+    if (navigator.clipboard) navigator.clipboard.writeText(code).then(function () { toast("Backup code copied"); }, function () { prompt("Copy this backup code:", code); });
+    else prompt("Copy this backup code:", code);
+  };
+  $("importBtn").onclick = function () {
+    var code = prompt("Paste your backup code:");
+    if (!code) return;
+    try {
+      var s = JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
+      if (!s.date) throw 0;
+      state = { date: s.date, pattern: s.pattern || DEFAULT_PATTERN, log: s.log || [], updated: s.updated };
+      save(); render(); toast("Restored");
+    } catch (e) { toast("That code didn't work"); }
+  };
+  $("resetBtn").onclick = function () {
+    if (!confirm("Reset your bookmark to the first strip and clear the log?")) return;
+    state = { date: FIRST, pattern: state.pattern, log: [], updated: null }; save(); render(); toast("Back to the beginning");
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>
